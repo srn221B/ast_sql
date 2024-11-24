@@ -1,51 +1,39 @@
 package main
 
 import (
-	"go/ast"
-	"go/format"
-	"go/token"
-	"os"
-	"strconv"
+	"fmt"
+	"strings"
+
+	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/format"
+	"github.com/pingcap/tidb/pkg/parser/model"
 )
 
 func main() {
-	f := &ast.File{
-		Name: ast.NewIdent("main"),
-		Decls: []ast.Decl{
-			&ast.GenDecl{
-				Tok: token.IMPORT,
-				Specs: []ast.Spec{
-					&ast.ImportSpec{
-						Path: &ast.BasicLit{
-							Kind:  token.STRING,
-							Value: strconv.Quote("fmt"),
-						},
-					},
-				},
-			},
-			&ast.FuncDecl{
-				Name: ast.NewIdent("main"),
-				Type: &ast.FuncType{},
-				Body: &ast.BlockStmt{
-					List: []ast.Stmt{
-						&ast.ExprStmt{
-							X: &ast.CallExpr{
-								Fun: &ast.SelectorExpr{
-									X:   ast.NewIdent("fmt"),
-									Sel: ast.NewIdent("Println"),
-								},
-								Args: []ast.Expr{
-									&ast.BasicLit{
-										Kind:  token.STRING,
-										Value: strconv.Quote("Hello, 世界"),
-									},
-								},
-							},
-						},
-					},
+	insertStmt := &ast.InsertStmt{
+		Table: &ast.TableRefsClause{
+			TableRefs: &ast.Join{
+				Left: &ast.TableName{
+					Name: model.NewCIStr("user"),
 				},
 			},
 		},
+		Columns: []*ast.ColumnName{
+			{
+				Name: model.NewCIStr("name"),
+			},
+		},
 	}
-	format.Node(os.Stdout, token.NewFileSet(), f)
+	var sb strings.Builder
+	restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
+
+	// InsertStmtをSQLに戻す
+	err := insertStmt.Restore(restoreCtx)
+	if err != nil {
+		fmt.Printf("Error restoring SQL: %v\n", err)
+		return
+	}
+
+	// 復元されたSQLを出力
+	fmt.Println("Restored SQL:", sb.String())
 }
